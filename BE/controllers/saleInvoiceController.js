@@ -146,6 +146,20 @@ export const createOrder = async (req, res) => {
         }
 
         await session.commitTransaction();
+
+        // Notification: New Order
+        try {
+            const { createNotification } = await import('../controllers/notificationController.js');
+            await createNotification({
+                type: 'ORDER',
+                title: 'Đơn hàng mới',
+                message: `Đơn hàng mới từ ${customerInfo.name} - ${calculatedTotal.toLocaleString('vi-VN')}đ`,
+                metadata: { orderId: invoiceId, link: '/orders' }
+            });
+        } catch (err) {
+            console.error('Notification error:', err);
+        }
+
         res.status(201).json({
             message: "Đặt hàng thành công",
             invoiceId,
@@ -349,6 +363,7 @@ export const updateOrder = async (req, res) => {
         }
 
         // Apply updates
+        // Apply updates
         const updatedOrder = await SaleInvoice.findByIdAndUpdate(
             id,
             updateData,
@@ -356,6 +371,21 @@ export const updateOrder = async (req, res) => {
         )
             .populate('warehouseId', 'warehouseName')
             .populate('statusId', 'statusName');
+
+        // Notification: Order Status Change
+        if (statusName && updatedOrder.statusId?.statusName === statusName) {
+            try {
+                const { createNotification } = await import('../controllers/notificationController.js');
+                await createNotification({
+                    type: 'ORDER',
+                    title: 'Cập nhật trạng thái đơn hàng',
+                    message: `Đơn hàng #${updatedOrder._id.toString().slice(-6)} đã chuyển sang trạng thái ${statusName}`,
+                    metadata: { orderId: updatedOrder._id, link: '/orders' }
+                });
+            } catch (err) {
+                console.error('Notification error:', err);
+            }
+        }
 
         res.status(200).json({
             message: 'Cập nhật đơn hàng thành công',

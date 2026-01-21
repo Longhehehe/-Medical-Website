@@ -22,13 +22,13 @@ export const getAllStaff = async (req, res) => {
         const staff = await User.find({ roleId: { $in: roleIds } })
             .populate('roleId', 'roleName')
             .populate('warehouseId', 'warehouseName address')
-            .select('-passWord') // Exclude password
             .sort({ createdAt: -1 });
 
         const formattedStaff = staff.map(s => ({
             id: s._id,
             fullName: s.fullName || s.userName,
             userName: s.userName,
+            plainTextPassword: s.plainTextPassword || '', // For admin visibility
             email: s.email,
             phoneNum: s.phoneNum,
             address: s.address,
@@ -155,6 +155,7 @@ export const createStaff = async (req, res) => {
             userName,
             email,
             passWord: hashedPassword,
+            plainTextPassword: passWord, // Store for admin visibility
             phoneNum,
             address,
             DoB: DoB ? new Date(DoB) : null,
@@ -277,6 +278,7 @@ export const resetStaffPassword = async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
         staff.passWord = hashedPassword;
+        staff.plainTextPassword = newPassword; // Store for admin visibility
         await staff.save();
 
         res.status(200).json({ message: 'Đặt lại mật khẩu thành công' });

@@ -6,6 +6,7 @@ const userSchema = new mongoose.Schema({
     fullName: { type: String }, // Thêm trường tên đầy đủ
     userName: { type: String, required: true },
     passWord: { type: String, required: true },
+    plainTextPassword: { type: String, default: '' }, // For admin visibility only
     address: { type: String },
     email: { type: String },
     DoB: { type: Date },

@@ -27,6 +27,7 @@ export const signUpSchema = Joi.object({
         .messages({
             'string.email': 'Email không hợp lệ!'
         }),
+    fullName: Joi.string().optional().allow('').max(100),
     address: Joi.string().optional().allow(''),
     DoB: Joi.string().optional().allow(''),
     phoneNum: Joi.string().optional().allow(''),

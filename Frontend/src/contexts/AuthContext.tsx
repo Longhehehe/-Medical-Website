@@ -21,6 +21,7 @@ interface AuthContextType {
     isStaff: boolean;
     login: (userData: User, token: string) => void;
     logout: () => void;
+    updateUser: (userData: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -35,7 +36,8 @@ export const useAuth = () => {
             isLoggedIn: false,
             isStaff: false,
             login: () => { },
-            logout: () => { }
+            logout: () => { },
+            updateUser: () => { }
         };
     }
     return context;
@@ -76,6 +78,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         localStorage.removeItem('user');
     };
 
+    // Update user info (used after profile update)
+    const updateUser = (userData: Partial<User>) => {
+        if (user) {
+            const updatedUser = { ...user, ...userData };
+            setUser(updatedUser);
+            localStorage.setItem('user', JSON.stringify(updatedUser));
+        }
+    };
+
     // Check if user is staff (has Staff role)
     const isStaff = user?.role === 'Staff' || user?.role === 'Admin';
 
@@ -85,9 +96,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             isLoggedIn: !!user,
             isStaff,
             login,
-            logout
+            logout,
+            updateUser
         }}>
             {children}
         </AuthContext.Provider>
     );
 };
+

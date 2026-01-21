@@ -20,8 +20,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Search, Plus, Pencil, Trash2, Phone, Mail, MapPin, Key } from 'lucide-react';
+import { Search, Plus, Pencil, Trash2, Phone, Mail, MapPin, Key, ShoppingBag, Eye, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 
 export default function Customers() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -40,6 +47,12 @@ export default function Customers() {
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
+  // Order history state
+  const [orderHistoryCustomer, setOrderHistoryCustomer] = useState<{ id: string; name: string } | null>(null);
+  const [customerOrders, setCustomerOrders] = useState<any[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+
   // Fetch customers from API
   const fetchCustomers = async () => {
     try {
@@ -49,6 +62,8 @@ export default function Customers() {
         const mappedCustomers = data.data.map((c: any) => ({
           id: c._id,
           name: c.fullName || '',
+          username: c.userName || '',
+          plainTextPassword: c.plainTextPassword || '',
           phone: c.phoneNum || '',
           email: c.email || '',
           address: c.address || '',
@@ -203,6 +218,47 @@ export default function Customers() {
     }
   };
 
+  // Fetch customer order history
+  const fetchCustomerOrders = async (customerId: string, customerName: string) => {
+    setOrderHistoryCustomer({ id: customerId, name: customerName });
+    setLoadingOrders(true);
+    setCustomerOrders([]);
+    try {
+      const res = await fetch(`http://127.0.0.1:3000/api/customer/${customerId}/orders`);
+      const data = await res.json();
+      if (data && data.data) {
+        setCustomerOrders(data.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch customer orders:', error);
+      toast.error('Không thể tải lịch sử đơn hàng');
+    } finally {
+      setLoadingOrders(false);
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Completed': return 'bg-green-500';
+      case 'Confirmed': return 'bg-blue-500';
+      case 'Processing': return 'bg-yellow-500';
+      case 'Pending': return 'bg-gray-500';
+      case 'Cancelled': return 'bg-red-500';
+      default: return 'bg-gray-400';
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'Completed': return 'Hoàn thành';
+      case 'Confirmed': return 'Đã xác nhận';
+      case 'Processing': return 'Đang xử lý';
+      case 'Pending': return 'Chờ xử lý';
+      case 'Cancelled': return 'Đã hủy';
+      default: return status;
+    }
+  };
+
   return (
     <DashboardLayout title="Quản lý khách hàng" subtitle="Thông tin và lịch sử khách hàng">
       <div className="rounded-xl bg-card p-6 card-shadow">
@@ -298,6 +354,9 @@ export default function Customers() {
                     <Button variant="ghost" size="icon" onClick={() => setResetPasswordId(customer.id)} title="Đặt lại mật khẩu">
                       <Key className="h-4 w-4" />
                     </Button>
+                    <Button variant="ghost" size="icon" onClick={() => fetchCustomerOrders(customer.id, customer.name)} title="Xem đơn hàng">
+                      <ShoppingBag className="h-4 w-4 text-blue-500" />
+                    </Button>
                     <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(customer.id)} title="Xóa">
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
@@ -328,9 +387,13 @@ export default function Customers() {
                   <p className="text-xs font-medium text-muted-foreground mb-1">Tài khoản đăng nhập:</p>
                   <div className="flex items-center gap-2 text-sm">
                     <Key className="h-3 w-3 text-primary" />
-                    <span className="font-mono text-primary">{customer.phone}</span>
+                    <span className="font-mono text-primary" title="Tên đăng nhập">
+                      {customer.username || customer.phone || customer.email || 'Chưa cập nhật'}
+                    </span>
                     <span className="text-muted-foreground">/</span>
-                    <span className="font-mono bg-muted px-1 rounded text-xs">123456</span>
+                    <span className="font-mono bg-muted px-1 rounded text-xs" title="Mật khẩu">
+                      {customer.plainTextPassword || '(Chưa lưu)'}
+                    </span>
                   </div>
                 </div>
 
@@ -393,6 +456,92 @@ export default function Customers() {
               <Button variant="outline" onClick={() => setResetPasswordId(null)}>Hủy</Button>
               <Button onClick={handleResetPassword}>Đặt lại mật khẩu</Button>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Order History Dialog */}
+        <Dialog open={!!orderHistoryCustomer} onOpenChange={(open) => {
+          if (!open) {
+            setOrderHistoryCustomer(null);
+            setCustomerOrders([]);
+            setExpandedOrderId(null);
+          }
+        }}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <ShoppingBag className="h-5 w-5" />
+                Lịch sử đơn hàng - {orderHistoryCustomer?.name}
+              </DialogTitle>
+            </DialogHeader>
+            <ScrollArea className="flex-1 pr-4">
+              {loadingOrders ? (
+                <div className="py-10 text-center text-muted-foreground">Đang tải...</div>
+              ) : customerOrders.length === 0 ? (
+                <div className="py-10 text-center text-muted-foreground">Chưa có đơn hàng nào</div>
+              ) : (
+                <div className="space-y-3">
+                  {customerOrders.map((order) => (
+                    <Collapsible
+                      key={order.id}
+                      open={expandedOrderId === order.id}
+                      onOpenChange={(open) => setExpandedOrderId(open ? order.id : null)}
+                    >
+                      <div className={`border rounded-lg p-4 ${order.status === 'Cancelled' ? 'bg-red-50 border-red-200' : 'bg-card'}`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div>
+                              <p className="font-medium">#{order.orderCode}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(order.createdAt).toLocaleString('vi-VN')}
+                              </p>
+                            </div>
+                            <Badge className={`${getStatusColor(order.status)} text-white`}>
+                              {getStatusText(order.status)}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="text-right">
+                              <p className={`font-semibold ${order.status === 'Cancelled' ? 'text-red-500 line-through' : 'text-primary'}`}>
+                                {order.totalAmount?.toLocaleString('vi-VN')}đ
+                              </p>
+                              <p className="text-xs text-muted-foreground">{order.itemCount} sản phẩm</p>
+                            </div>
+                            <CollapsibleTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </CollapsibleTrigger>
+                          </div>
+                        </div>
+                        <CollapsibleContent>
+                          <div className="mt-4 pt-4 border-t space-y-2">
+                            <p className="text-xs font-medium text-muted-foreground mb-2">Chi tiết đơn hàng:</p>
+                            {order.items?.map((item: any, idx: number) => (
+                              <div key={idx} className="flex justify-between text-sm py-1 border-b border-dashed last:border-0">
+                                <span>{item.productName} x{item.quantity} {item.unit}</span>
+                                <span className="text-muted-foreground">{item.totalPrice?.toLocaleString('vi-VN')}đ</span>
+                              </div>
+                            ))}
+                            {order.shippingAddress && (
+                              <div className="mt-2 text-xs text-muted-foreground">
+                                <MapPin className="inline h-3 w-3 mr-1" />
+                                {order.shippingAddress}
+                              </div>
+                            )}
+                            {order.branch && (
+                              <div className="text-xs text-muted-foreground">
+                                Chi nhánh: {order.branch}
+                              </div>
+                            )}
+                          </div>
+                        </CollapsibleContent>
+                      </div>
+                    </Collapsible>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
           </DialogContent>
         </Dialog>
       </div>

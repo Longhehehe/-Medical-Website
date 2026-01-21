@@ -49,6 +49,7 @@ interface Staff {
     id: string;
     fullName: string;
     userName: string;
+    plainTextPassword?: string;
     email: string;
     phoneNum: string;
     address: string;
@@ -538,8 +539,8 @@ export default function Staff() {
                                             <div className="font-medium">{staff.fullName}</div>
                                         </TableCell>
                                         <TableCell>
-                                            <div className="font-medium text-primary">{staff.email}</div>
-                                            <div className="text-xs text-muted-foreground">Mật khẩu: <span className="font-mono bg-muted px-1 rounded">123456</span></div>
+                                            <div className="font-medium text-primary">{staff.userName || staff.email}</div>
+                                            <div className="text-xs text-muted-foreground">Mật khẩu: <span className="font-mono bg-muted px-1 rounded">{staff.plainTextPassword || '(Chưa lưu)'}</span></div>
                                         </TableCell>
                                         <TableCell>
                                             <div>{staff.phoneNum || '-'}</div>

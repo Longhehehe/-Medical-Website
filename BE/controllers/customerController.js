@@ -1,6 +1,7 @@
 import { User } from '../models/auth/User.js';
 import { Role } from '../models/auth/Role.js';
 import { SaleInvoice } from '../models/saleInvoice/SaleInvoice.js';
+import { OrderStatus } from '../models/saleInvoice/OrderStatus.js';
 import bcrypt from 'bcrypt';
 
 // Get all customers with stats
@@ -12,6 +13,10 @@ export const getAllCustomers = async (req, res) => {
             roleName: { $in: ['Admin', 'Staff', 'WarehouseStaff'] }
         });
         const staffRoleIds = staffRoles.map(r => r._id);
+
+        // Find Cancelled status ID to exclude from spending
+        const cancelledStatus = await OrderStatus.findOne({ statusName: 'Cancelled' });
+        const cancelledStatusId = cancelledStatus?._id;
 
         const customers = await User.aggregate([
             // Exclude staff/admin roles
@@ -34,8 +39,26 @@ export const getAllCustomers = async (req, res) => {
             },
             {
                 $addFields: {
+                    // Total orders (all orders including cancelled)
                     totalOrders: { $size: '$invoices' },
-                    totalSpent: { $sum: '$invoices.totalAmount' }
+                    // Total spent (exclude cancelled orders)
+                    totalSpent: {
+                        $sum: {
+                            $map: {
+                                input: {
+                                    $filter: {
+                                        input: '$invoices',
+                                        as: 'inv',
+                                        cond: cancelledStatusId
+                                            ? { $ne: ['$$inv.statusId', cancelledStatusId] }
+                                            : true
+                                    }
+                                },
+                                as: 'validInv',
+                                in: '$$validInv.totalAmount'
+                            }
+                        }
+                    }
                 }
             },
             {
@@ -46,6 +69,7 @@ export const getAllCustomers = async (req, res) => {
                     phoneNum: 1,
                     email: 1,
                     address: 1,
+                    plainTextPassword: 1, // Include for admin visibility
                     createdAt: 1,
                     totalOrders: 1,
                     totalSpent: 1
@@ -144,6 +168,7 @@ export const createCustomer = async (req, res) => {
             email: email?.trim() || '',
             address: address?.trim() || '',
             passWord: hashedPassword,
+            plainTextPassword: '123456', // Default password for admin visibility
             roleId: customerRole._id
         });
 
@@ -243,12 +268,75 @@ export const resetCustomerPassword = async (req, res) => {
         const hashedPassword = await bcrypt.hash(newPassword, salt);
 
         customer.passWord = hashedPassword;
+        customer.plainTextPassword = newPassword; // Store for admin visibility
         await customer.save();
 
         res.status(200).json({ message: 'Đặt lại mật khẩu thành công' });
     } catch (error) {
         console.error('Reset password error:', error);
         res.status(500).json({ message: 'Lỗi khi đặt lại mật khẩu' });
+    }
+};
+
+// Get all orders for a specific customer
+export const getCustomerOrders = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Verify customer exists
+        const customer = await User.findById(id);
+        if (!customer) {
+            return res.status(404).json({ message: 'Khách hàng không tồn tại' });
+        }
+
+        // Get all orders with details
+        const orders = await SaleInvoice.find({ userId: id })
+            .populate('statusId', 'statusName')
+            .populate('warehouseId', 'warehouseName')
+            .sort({ createdAt: -1 });
+
+        // Get order details for each order
+        const { SaleInvoiceDetail } = await import('../models/saleInvoice/SaleInvoiceDetail.js');
+
+        const ordersWithDetails = await Promise.all(orders.map(async (order) => {
+            const details = await SaleInvoiceDetail.find({ saleInvoiceId: order._id })
+                .populate('productId', 'productName unit');
+
+            const items = details.map(d => ({
+                productId: d.productId?._id,
+                productName: d.productId?.productName || 'Sản phẩm',
+                quantity: d.quantity,
+                unit: d.productId?.unit || 'Đơn vị',
+                unitPrice: d.unitPrice,
+                totalPrice: d.totalPrice
+            }));
+
+            return {
+                id: order._id,
+                orderCode: order._id.toString().slice(-8).toUpperCase(),
+                status: order.statusId?.statusName || 'Unknown',
+                totalAmount: order.totalAmount,
+                paymentMethod: order.paymentMethod || 'COD',
+                shippingAddress: order.shippingAddress,
+                branch: order.warehouseId?.warehouseName || null,
+                isInStoreSale: order.isInStoreSale || false,
+                createdAt: order.createdAt,
+                itemCount: items.length,
+                items: items
+            };
+        }));
+
+        res.status(200).json({
+            data: ordersWithDetails,
+            customer: {
+                id: customer._id,
+                name: customer.fullName,
+                phone: customer.phoneNum
+            }
+        });
+    } catch (error) {
+        console.error('Get customer orders error:', error);
+        res.status(500).json({ message: 'Lỗi khi tải danh sách đơn hàng' });
     }
 };
 

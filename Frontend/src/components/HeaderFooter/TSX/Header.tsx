@@ -24,24 +24,48 @@ export const Header = () => {
 
   // Auth context for user info
   const { user, isLoggedIn, isStaff, logout } = useAuth();
+  const navigate = useNavigate();
 
   const productList = isProductList ? styles.active : "";
   const headerHidden = isHeaderHidden ? styles["header-hidden"] : "";
   const data = localStorage.getItem("shoppingCart") || "[]";
   const ProductList = JSON.parse(data);
 
+  // useDebounce could be better, but simple timeout works for now
   useEffect(() => {
-    const tmp = localStorage.getItem("products");
-    if (tmp) {
-      try {
-        setProductsData(JSON.parse(tmp));
-      } catch (e) {
-        console.error("Loi", e);
+    const fetchSearchResults = async () => {
+      if (!valueOfFind.trim()) {
+        setProductsData([]);
+        return;
       }
-    }
-  }, []);
+      try {
+        // Call backend API to search
+        const response = await fetch(`http://localhost:3000/api/product/getAll?search=${encodeURIComponent(valueOfFind)}&limit=5`);
+        const data = await response.json();
 
-  const navigate = useNavigate();
+        if (data && data.data) {
+          // Backend returns { data: [...], pagination: ... }
+          // Map to frontend Product interface format
+          const mappedProducts = data.data.map((item: any) => ({
+            id: item._id, // Frontend uses 'id' but backend returns '_id'
+            productName: item.productName,
+            img: Array.isArray(item.img) && item.img.length > 0 ? item.img[0] : (typeof item.img === 'string' && item.img ? item.img : '/images/medicine.png'),
+            cost: item.price
+          }));
+          setProductsData(mappedProducts);
+        }
+      } catch (error) {
+        console.error("Error fetching search results:", error);
+      }
+    };
+
+    const debounceTimer = setTimeout(() => {
+      fetchSearchResults();
+    }, 500); // Debounce 500ms
+
+    return () => clearTimeout(debounceTimer);
+  }, [valueOfFind]);
+
   const handleSetValueOfFind = (value: string) => {
     setValueOfFind(value);
   };
@@ -161,9 +185,6 @@ export const Header = () => {
           {isFocus && (
             <section className={styles.productsList}>
               {productsData
-                .filter((product) =>
-                  product.productName.toLowerCase().includes(valueOfFind)
-                )
                 .map((item) => (
                   <div
                     className={styles.productItem}

@@ -33,6 +33,10 @@ export const Login = () => {
       const token = response.data.token;
       login(userData, token);
 
+      // Clear cart when logging in to prevent confusion between accounts
+      localStorage.removeItem('shoppingCart');
+      localStorage.removeItem('buyNowCart');
+
       console.log('Logged in as:', userData.role, userData.warehouse?.name || 'N/A');
 
       // Redirect sau 1 giây

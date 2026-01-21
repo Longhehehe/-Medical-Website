@@ -86,6 +86,19 @@ export const createTransfer = async (req, res) => {
             message: 'Tạo phiếu chuyển kho thành công',
             data: populated
         });
+
+        // Notification: New Transfer
+        try {
+            const { createNotification } = await import('../controllers/notificationController.js');
+            await createNotification({
+                type: 'TRANSFER',
+                title: 'Yêu cầu chuyển kho mới',
+                message: `Yêu cầu chuyển từ ${populated.fromWarehouseId.warehouseName} sang ${populated.toWarehouseId.warehouseName}`,
+                metadata: { transferId: transfer._id, link: '/transfers' }
+            });
+        } catch (err) {
+            console.error('Notification error:', err);
+        }
     } catch (error) {
         console.error(error);
         res.status(400).json({ message: error.message || 'Lỗi khi tạo phiếu chuyển kho' });
@@ -178,6 +191,19 @@ export const completeTransfer = async (req, res) => {
 
         await session.commitTransaction();
 
+        // Notification: Transfer Completed
+        try {
+            const { createNotification } = await import('../controllers/notificationController.js');
+            await createNotification({
+                type: 'TRANSFER',
+                title: 'Hoàn thành chuyển kho',
+                message: `Phiếu chuyển #${transfer._id.toString().slice(-6)} đã hoàn thành`,
+                metadata: { transferId: transfer._id, link: '/transfers' }
+            });
+        } catch (err) {
+            console.error('Notification error:', err);
+        }
+
         res.status(200).json({
             message: 'Chuyển kho thành công',
             data: transfer
@@ -242,15 +268,23 @@ export const getTransferStats = async (req, res) => {
 
 // Delete transfer and restore stock to source warehouse
 export const deleteTransfer = async (req, res) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
+    let session = null;
 
     try {
         const { id } = req.params;
 
+        // Validate ObjectId format
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ message: 'ID phiếu chuyển kho không hợp lệ' });
+        }
+
+        session = await mongoose.startSession();
+        session.startTransaction();
+
         const transfer = await InventoryTransfer.findById(id).session(session);
         if (!transfer) {
             await session.abortTransaction();
+            session.endSession();
             return res.status(404).json({ message: 'Phiếu chuyển kho không tồn tại' });
         }
 
@@ -320,6 +354,7 @@ export const deleteTransfer = async (req, res) => {
         await InventoryTransfer.deleteOne({ _id: id }, { session });
 
         await session.commitTransaction();
+        session.endSession();
 
         res.status(200).json({
             message: restoredCount > 0
@@ -329,10 +364,18 @@ export const deleteTransfer = async (req, res) => {
         });
 
     } catch (error) {
-        await session.abortTransaction();
         console.error('Error deleting transfer:', error);
-        res.status(500).json({ message: 'Lỗi khi xóa phiếu chuyển kho' });
-    } finally {
-        session.endSession();
+
+        // Safely abort transaction
+        if (session) {
+            try {
+                await session.abortTransaction();
+            } catch (abortError) {
+                console.error('Error aborting transaction:', abortError);
+            }
+            session.endSession();
+        }
+
+        res.status(500).json({ message: error.message || 'Lỗi khi xóa phiếu chuyển kho' });
     }
 };

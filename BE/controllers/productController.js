@@ -107,7 +107,6 @@ export const getAllProducts = async (req, res) => {
             const allProducts = await Product.find(query)
                 .populate('manufacturerId', 'manufacturerName')
                 .populate('categoryId', 'categoryName')
-                .populate('img')
                 .sort({ createdAt: -1 });
 
             // Calculate stock for each product
@@ -162,7 +161,6 @@ export const getAllProducts = async (req, res) => {
             .limit(limit)
             .populate('manufacturerId', 'manufacturerName')
             .populate('categoryId', 'categoryName')
-            .populate('img')
             .sort({ stockQuantity: -1, createdAt: -1 }); // Sort by stock DESC, then by date
 
         const totalProducts = await Product.countDocuments(query);
@@ -375,6 +373,19 @@ export const createBulkBatches = async (req, res) => {
         const uniqueProductIds = [...new Set(createdBatches.map(b => b.productId.toString()))];
         for (const pid of uniqueProductIds) {
             await updateProductStock(pid);
+        }
+
+        // Notification: New Batch Import
+        try {
+            const { createNotification } = await import('../controllers/notificationController.js');
+            await createNotification({
+                type: 'BATCH',
+                title: 'Nhập hàng mới',
+                message: `Đã nhập ${quantity} lô hàng từ kho ${warehouseId}`,
+                metadata: { batchId: createdBatches[0]?._id, link: '/batches' }
+            });
+        } catch (err) {
+            console.error('Notification error:', err);
         }
 
         res.status(201).json(createdBatches);

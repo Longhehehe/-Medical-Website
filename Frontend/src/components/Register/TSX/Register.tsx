@@ -27,38 +27,52 @@ export const Register = () => {
     if (error) setError(null);
     return;
   };
-  
+
   const handleRegister = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
-    
+
     const form = e.currentTarget;
     const email = (form.elements.namedItem('email-res') as HTMLInputElement).value;
     const userName = (form.elements.namedItem('username-res') as HTMLInputElement)?.value || email.split('@')[0];
     const passWord = passwordData.password;
     const phoneNum = (form.elements.namedItem('phone-res') as HTMLInputElement)?.value || "";
     const DoB = (form.elements.namedItem('dob-res') as HTMLInputElement)?.value || "";
-    
+    const fullName = (form.elements.namedItem('fullname-res') as HTMLInputElement)?.value || "";
+    const address = (form.elements.namedItem('address-res') as HTMLInputElement)?.value || "";
+
     if (!check) {
       setError("Email không hợp lệ");
       return;
     }
-    
+
+    if (!fullName.trim()) {
+      setError("Vui lòng nhập họ tên");
+      return;
+    }
+
+    if (!phoneNum.trim()) {
+      setError("Vui lòng nhập số điện thoại");
+      return;
+    }
+
     if (passwordData.password !== passwordData.passwordConfirm) {
       setError("Mật khẩu xác nhận không đúng");
       return;
     }
-    
+
     try {
       const response = await authService.signup({
         userName,
         passWord,
         email,
         DoB,
-        phoneNum
+        phoneNum,
+        fullName,
+        address
       });
-      
+
       setSuccess(response.data.message);
       setTimeout(() => {
         window.location.href = "/Login";
@@ -105,6 +119,48 @@ export const Register = () => {
               </p>
 
               <form className={styles.form} onSubmit={handleRegister}>
+                {/* Họ tên - Required */}
+                <div className={styles["input-box"]}>
+                  <span className={styles.icon}>
+                    <i className="fa-solid fa-user"></i>
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    id="fullname-res"
+                    name="fullName"
+                  />
+                  <label htmlFor="fullname-res">Họ tên *</label>
+                </div>
+
+                {/* Số điện thoại - Required */}
+                <div className={styles["input-box"]}>
+                  <span className={styles.icon}>
+                    <i className="fa-solid fa-phone"></i>
+                  </span>
+                  <input
+                    type="tel"
+                    required
+                    id="phone-res"
+                    name="phoneNum"
+                  />
+                  <label htmlFor="phone-res">Số điện thoại *</label>
+                </div>
+
+                {/* Địa chỉ - Optional */}
+                <div className={styles["input-box"]}>
+                  <span className={styles.icon}>
+                    <i className="fa-solid fa-location-dot"></i>
+                  </span>
+                  <input
+                    type="text"
+                    id="address-res"
+                    name="address"
+                  />
+                  <label htmlFor="address-res">Địa chỉ</label>
+                </div>
+
+                {/* Email - Required */}
                 <div className={styles["input-box"]}>
                   <span className={styles.icon}>
                     <i className="fa-solid fa-envelope"></i>
@@ -116,7 +172,7 @@ export const Register = () => {
                     onChange={(e) => isValidEmail(e.target.value)}
                   />
 
-                  <label htmlFor="email-res">Email</label>
+                  <label htmlFor="email-res">Email *</label>
                 </div>
 
                 <div className={styles["input-box"]}>

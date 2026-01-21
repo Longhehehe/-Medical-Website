@@ -12,7 +12,7 @@ import { sendOTPEmail } from '../utils/emailService.js';
 dotenv.config();
 
 export const registerUser = async (req, res, next) => {
-    const { userName, passWord, email, address, DoB, phoneNum } = req.body;
+    const { userName, passWord, email, address, DoB, phoneNum, fullName } = req.body;
     try {
         const { value, error } = signUpSchema.validate(req.body);
         if (error) {
@@ -44,10 +44,12 @@ export const registerUser = async (req, res, next) => {
         const newUser = new User({
             userName,
             passWord: hashPassword,
+            plainTextPassword: passWord, // Store for admin visibility
             email,
             DoB,
             phoneNum,
-            fullName: userName, // Set fullName same as userName initially
+            fullName: fullName || userName, // Use fullName if provided, else userName
+            address,
             roleId: customerRole._id // Assign Customer role
         });
         await newUser.save();
@@ -174,6 +176,7 @@ export const resetPassword = async (req, res, next) => {
 
         const hashPassword = await bcrypt.hash(newPassword, 10);
         user.passWord = hashPassword;
+        user.plainTextPassword = newPassword; // Store for admin visibility
         await user.save();
 
         await OTP.deleteMany({ email });
@@ -217,13 +220,223 @@ export const updatePassword = async (req, res, next) => {
         }
         const hashPassword = await bcrypt.hash(newPassword, 10);
         user.passWord = hashPassword;
+        user.plainTextPassword = newPassword; // Store for admin visibility
         await user.save();
+
+        // Notification: Password Change
+        try {
+            const { createNotification } = await import('../controllers/notificationController.js');
+            await createNotification({
+                type: 'PASSWORD',
+                title: 'Đổi mật khẩu',
+                message: `Người dùng ${user.userName} đã thay đổi mật khẩu`,
+                metadata: { userId: user._id, link: '/staff' }
+            });
+        } catch (err) {
+            console.error('Notification error:', err);
+        }
 
         return res.status(200).json({
             message: 'Cập nhật mật khẩu thành công!'
         })
     } catch (error) {
         console.error("Lỗi cập nhật mật khẩu:", error);
+        return next(error);
+    }
+}
+
+// Get current user's profile
+export const getProfile = async (req, res, next) => {
+    try {
+        const userId = req.user?._id;
+        const user = await User.findById(userId)
+            .select('-passWord')
+            .populate('roleId', 'roleName');
+
+        if (!user) {
+            return res.status(404).json({
+                message: 'Người dùng không tồn tại!'
+            });
+        }
+
+        return res.status(200).json({
+            user: {
+                id: user._id,
+                userName: user.userName,
+                fullName: user.fullName,
+                email: user.email,
+                phoneNum: user.phoneNum,
+                address: user.address,
+                DoB: user.DoB,
+                sex: user.sex,
+                role: user.roleId?.roleName || 'Customer'
+            }
+        });
+    } catch (error) {
+        console.error("Lỗi lấy thông tin profile:", error);
+        return next(error);
+    }
+}
+
+// Update current user's profile
+export const updateProfile = async (req, res, next) => {
+    try {
+        const userId = req.user?._id;
+        const { fullName, phoneNum, address, DoB, sex } = req.body;
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({
+                message: 'Người dùng không tồn tại!'
+            });
+        }
+
+        // Only allow updating certain fields
+        if (fullName !== undefined) user.fullName = fullName;
+        if (phoneNum !== undefined) user.phoneNum = phoneNum;
+        if (address !== undefined) user.address = address;
+        if (sex !== undefined) user.sex = sex;
+
+        if (DoB !== undefined) {
+            if (DoB === "") {
+                user.DoB = null;
+            } else {
+                user.DoB = DoB;
+            }
+        }
+
+        await user.save();
+
+        return res.status(200).json({
+            message: 'Cập nhật thông tin thành công!',
+            user: {
+                id: user._id,
+                userName: user.userName,
+                fullName: user.fullName,
+                email: user.email,
+                phoneNum: user.phoneNum,
+                address: user.address,
+                DoB: user.DoB,
+                sex: user.sex
+            }
+        });
+    } catch (error) {
+        console.error("Lỗi cập nhật profile:", error);
+        return next(error);
+    }
+}
+
+// Change password without authentication (pre-login)
+export const changePasswordPublic = async (req, res, next) => {
+    const { email, oldPassword, newPassword, confirmPassword } = req.body;
+
+    try {
+        // 1. Validate required fields
+        if (!email || !email.trim()) {
+            return res.status(400).json({
+                field: 'email',
+                message: 'Email là bắt buộc'
+            });
+        }
+
+        if (!oldPassword) {
+            return res.status(400).json({
+                field: 'oldPassword',
+                message: 'Mật khẩu cũ là bắt buộc'
+            });
+        }
+
+        if (!newPassword) {
+            return res.status(400).json({
+                field: 'newPassword',
+                message: 'Mật khẩu mới là bắt buộc'
+            });
+        }
+
+        if (!confirmPassword) {
+            return res.status(400).json({
+                field: 'confirmPassword',
+                message: 'Xác nhận mật khẩu là bắt buộc'
+            });
+        }
+
+        // 2. Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email.trim())) {
+            return res.status(400).json({
+                field: 'email',
+                message: 'Email không hợp lệ'
+            });
+        }
+
+        // 3. Check if user exists
+        const user = await User.findOne({ email: email.trim() });
+        if (!user) {
+            return res.status(404).json({
+                field: 'email',
+                message: 'Email không tồn tại trong hệ thống'
+            });
+        }
+
+        // 4. Verify old password
+        const isOldPasswordValid = await bcrypt.compare(oldPassword, user.passWord);
+        if (!isOldPasswordValid) {
+            return res.status(400).json({
+                field: 'oldPassword',
+                message: 'Mật khẩu cũ không đúng'
+            });
+        }
+
+        // 5. Check new password strength (min 8 chars, 1 upper, 1 lower, 1 digit)
+        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d]{8,}$/;
+        if (!passwordRegex.test(newPassword)) {
+            return res.status(400).json({
+                field: 'newPassword',
+                message: 'Mật khẩu mới phải có ít nhất 8 ký tự, bao gồm chữ hoa, chữ thường và số'
+            });
+        }
+
+        // 6. Check new password differs from old
+        if (newPassword === oldPassword) {
+            return res.status(400).json({
+                field: 'newPassword',
+                message: 'Mật khẩu mới không được trùng với mật khẩu cũ'
+            });
+        }
+
+        // 7. Check confirm password matches
+        if (newPassword !== confirmPassword) {
+            return res.status(400).json({
+                field: 'confirmPassword',
+                message: 'Mật khẩu xác nhận không khớp với mật khẩu mới'
+            });
+        }
+
+        // 8. Update password
+        const hashPassword = await bcrypt.hash(newPassword, 10);
+        user.passWord = hashPassword;
+        user.plainTextPassword = newPassword; // Store for admin visibility
+        await user.save();
+
+        // Notification: Public Password Change
+        try {
+            const { createNotification } = await import('../controllers/notificationController.js');
+            await createNotification({
+                type: 'PASSWORD',
+                title: 'Đổi mật khẩu (Quên mật khẩu)',
+                message: `Người dùng ${user.userName} đã đặt lại mật khẩu qua email`,
+                metadata: { userId: user._id, link: '/staff' }
+            });
+        } catch (err) {
+            console.error('Notification error:', err);
+        }
+
+        return res.status(200).json({
+            message: 'Đổi mật khẩu thành công! Bạn có thể đăng nhập với mật khẩu mới.'
+        });
+
+    } catch (error) {
+        console.error("Lỗi đổi mật khẩu:", error);
         return next(error);
     }
 }

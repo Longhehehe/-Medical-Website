@@ -16,15 +16,18 @@ import MedicineChat from "./components/Chatbot/Chatbot";
 import ShoppingCartPage from "./pages/TSX/ShoppingCart";
 import PaymentPage from "./pages/TSX/PaymentPage";
 import PaymentResult from "./pages/PaymentResult/PaymentResult";
-import ProfilePage from "./pages/TSX/ProfilePage";
-import { ProfileButton } from "./components/Profile/TSX/ProfileButton";
+import CustomerPage from "./pages/TSX/CustomerPage";
+import EditInfoPage from "./pages/TSX/EditInfoPage";
+import PurchaseHistoryPage from "./pages/TSX/PurchaseHistoryPage";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 function App() {
   const location = useLocation();
   return (
     <>
       <ClickEffect />
-      <ProfileButton />
+      <ToastContainer />
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<LandingPage />}></Route>
@@ -44,7 +47,16 @@ function App() {
           <Route path="/ConfirmOtp" element={<ConfirmOtpPage />}></Route>
           <Route path="/ChangePass" element={<ChangePassPage />}></Route>
           <Route path="/chat" element={<MedicineChat />}></Route>
-          <Route path="/Profile" element={<ProfilePage />}></Route>
+
+          <Route path="/customer/info" element={<CustomerPage />}></Route>
+          <Route
+            path="/customer/info/editInfo"
+            element={<EditInfoPage />}
+          ></Route>
+          <Route
+            path="/customer/history"
+            element={<PurchaseHistoryPage />}
+          ></Route>
         </Routes>
       </AnimatePresence>
     </>

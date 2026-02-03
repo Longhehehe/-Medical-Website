@@ -45,6 +45,21 @@ export async function updateProductStock(productId) {
     }
 }
 
+export const getUniqueBrands = async (req, res) => {
+    try {
+        const brands = await Product.distinct('brand');
+        // Filter out empty or null brands and sort alphabetically
+        const sortedBrands = brands.filter(b => b).sort();
+
+        res.status(200).json({
+            success: true,
+            data: sortedBrands
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 export const getAllProducts = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
@@ -97,6 +112,12 @@ export const getAllProducts = async (req, res) => {
         // Find central warehouse
         const centralWarehouse = await Warehouse.findOne({ warehouseType: 'central' });
         const centralWarehouseId = centralWarehouse?._id;
+
+        // Filter by manufacturerId
+        const { manufacturerId } = req.query;
+        if (manufacturerId && manufacturerId !== 'all') {
+            query.manufacturerId = manufacturerId;
+        }
 
         console.log('Central warehouse:', centralWarehouse ? centralWarehouse.warehouseName : 'NOT FOUND');
         // If no central warehouse, don't filter by warehouse (show all stock)

@@ -23,9 +23,16 @@ export const ForgotPassword = () => {
   };
   const handleToConfirmOtp = async (event: FormEvent) => {
     event.preventDefault();
+    // BYPASS: Skip validation and API call
     setError(null);
     setSuccess(null);
     
+    // Auto-navigate to OTP
+    console.log("Bypassing Forgot Password check...");
+    localStorage.setItem('resetEmail', email || "bypass@example.com"); // Set dummy or entered email
+    window.location.href = "/ConfirmOtp";
+
+    /* Original Logic skipped
     if (!check) {
       setError("Email không hợp lệ");
       return;
@@ -42,6 +49,7 @@ export const ForgotPassword = () => {
     } catch (error: any) {
       setError(error.response?.data?.message || 'Lỗi yêu cầu OTP');
     }
+    */
   };
   return (
     <>

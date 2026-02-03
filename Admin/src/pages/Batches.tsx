@@ -75,6 +75,11 @@ interface ProductSimple {
     variants?: { unit: string; price: number }[];
 }
 
+interface ManufacturerSimple {
+    _id: string;
+    manufacturerName: string;
+}
+
 interface InvoiceGroup {
     invoiceId: string;
     batches: ProductBatch[];
@@ -87,11 +92,13 @@ interface InvoiceGroup {
 const ProductSelect = ({
     value,
     onChange,
-    displayName
+    displayName,
+    brand
 }: {
     value: string,
     onChange: (val: string, name: string, variants?: { unit: string; price: number }[]) => void,
-    displayName?: string
+    displayName?: string,
+    brand?: string
 }) => {
     const [open, setOpen] = useState(false)
     const [search, setSearch] = useState("")
@@ -103,12 +110,15 @@ const ProductSelect = ({
             fetchProducts(search)
         }, 300)
         return () => clearTimeout(timer)
-    }, [search])
+    }, [search, brand]) // Re-fetch when brand changes
 
     const fetchProducts = async (term: string) => {
         setLoading(true)
         try {
-            const query = term ? `?search=${encodeURIComponent(term)}&limit=20` : '?limit=20';
+            let query = term ? `?search=${encodeURIComponent(term)}&limit=20` : '?limit=20';
+            if (brand) {
+                query += `&brand=${encodeURIComponent(brand)}`;
+            }
             const res = await fetch(`http://127.0.0.1:3000/api/product/getAll${query}`)
             const data = await res.json()
             if (data && data.data) {
@@ -184,6 +194,113 @@ const ProductSelect = ({
     )
 }
 
+const BrandSelect = ({
+    value,
+    onChange
+}: {
+    value: string,
+    onChange: (val: string) => void
+}) => {
+    const [open, setOpen] = useState(false)
+    const [search, setSearch] = useState("")
+    const [options, setOptions] = useState<string[]>([])
+    const [loading, setLoading] = useState(false)
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            fetchBrands()
+        }, 300)
+        return () => clearTimeout(timer)
+    }, [])
+
+    const fetchBrands = async () => {
+        setLoading(true)
+        try {
+            const res = await fetch(`http://127.0.0.1:3000/api/product/brands`)
+            const data = await res.json()
+            if (data && data.data) {
+                setOptions(data.data)
+            }
+        } catch (error) {
+            console.error(error)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const filteredOptions = options.filter(opt => opt.toLowerCase().includes(search.toLowerCase()));
+
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={open}
+                    className="w-full justify-between font-normal h-10"
+                >
+                    <span className="truncate flex-1 text-left">{value || "Chọn nhà sản xuất..."}</span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[400px] p-0" align="start">
+                <Command shouldFilter={false}>
+                    <CommandInput
+                        placeholder="Tìm nhà sản xuất..."
+                        value={search}
+                        onValueChange={setSearch}
+                    />
+                    <CommandList>
+                        {loading && (
+                            <div className="py-6 text-center text-sm text-muted-foreground">
+                                Đang tải...
+                            </div>
+                        )}
+                        {!loading && filteredOptions.length === 0 && (
+                            <CommandEmpty>Không tìm thấy nhà sản xuất.</CommandEmpty>
+                        )}
+                        <CommandGroup>
+                            <CommandItem
+                                value="all"
+                                onSelect={() => {
+                                    onChange("");
+                                    setOpen(false);
+                                }}
+                            >
+                                <Check
+                                    className={cn(
+                                        "mr-2 h-4 w-4",
+                                        value === "" ? "opacity-100" : "opacity-0"
+                                    )}
+                                />
+                                Tất cả nhà sản xuất
+                            </CommandItem>
+                            {filteredOptions.map((brand) => (
+                                <CommandItem
+                                    key={brand}
+                                    value={brand}
+                                    onSelect={() => {
+                                        onChange(brand);
+                                        setOpen(false);
+                                    }}
+                                >
+                                    <Check
+                                        className={cn(
+                                            "mr-2 h-4 w-4",
+                                            value === brand ? "opacity-100" : "opacity-0"
+                                        )}
+                                    />
+                                    {brand}
+                                </CommandItem>
+                            ))}
+                        </CommandGroup>
+                    </CommandList>
+                </Command>
+            </PopoverContent>
+        </Popover>
+    )
+}
+
 export default function Batches() {
     const [batches, setBatches] = useState<ProductBatch[]>([]);
     const [products, setProducts] = useState<ProductSimple[]>([]);
@@ -200,7 +317,9 @@ export default function Batches() {
     const [warehouses, setWarehouses] = useState<{ id: string, name: string }[]>([]);
 
     // Warehouse for import (declare before useEffect)
+    // Warehouse for import (declare before useEffect)
     const [importWarehouseId, setImportWarehouseId] = useState<string>('');
+    const [importBrand, setImportBrand] = useState<string>('');
 
     useEffect(() => {
         const fetchWarehouses = async () => {
@@ -353,6 +472,7 @@ export default function Batches() {
 
     const handleAdd = () => {
         setEditingBatch(null);
+        setImportBrand(''); // Reset brand
         setImportItems([{
             productId: '',
             productName: '',
@@ -747,6 +867,14 @@ export default function Batches() {
                                             ))}
                                         </SelectContent>
                                     </Select>
+
+                                    <div className="mt-4">
+                                        <Label className="text-sm font-medium mb-2 block">Nhà sản xuất (Lọc sản phẩm)</Label>
+                                        <BrandSelect
+                                            value={importBrand}
+                                            onChange={setImportBrand}
+                                        />
+                                    </div>
                                 </div>
                             )}
                             {importItems.map((item, index) => (
@@ -756,6 +884,7 @@ export default function Batches() {
                                         <ProductSelect
                                             value={item.productId}
                                             displayName={item.productName}
+                                            brand={importBrand}
                                             onChange={(val, name, variants) => {
                                                 const defaultUnit = variants && variants.length > 0 ? variants[0].unit : '';
                                                 updateImportItem(index, {

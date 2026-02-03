@@ -46,6 +46,9 @@ app.use('/api/warehouse', warehouseRoutes)
 import transferRoutes from './routes/transfer.js'
 app.use('/api/transfer', transferRoutes)
 
+import manufacturerRoutes from './routes/manufacturer.js'
+app.use('/api/manufacturer', manufacturerRoutes)
+
 import notificationRoutes from './routes/notification.js'
 app.use('/api/notifications', notificationRoutes)
 

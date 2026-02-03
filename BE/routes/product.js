@@ -3,8 +3,9 @@ const router = express.Router();
 
 
 
-import { getAllProducts, getProductById, getProductBatches, getAllBatches, createBatch, createBulkBatches, updateBatch, deleteBatch, getBatchesByInvoice, updateBatchGroup, updateProduct } from '../controllers/productController.js';
+import { getAllProducts, getProductById, getProductBatches, getAllBatches, createBatch, createBulkBatches, updateBatch, deleteBatch, getBatchesByInvoice, updateBatchGroup, updateProduct, getUniqueBrands } from '../controllers/productController.js';
 
+router.get('/brands', getUniqueBrands);
 router.get('/getAll', getAllProducts);
 router.get('/batches/getAll', getAllBatches);
 router.post('/batches/create', createBatch);
